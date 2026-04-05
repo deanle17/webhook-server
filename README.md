@@ -48,9 +48,18 @@ curl localhost:8080/webhooks/<uuid>
 
 ## Running Tests
 
+**Unit tests** (no dependencies):
 ```bash
 go test ./...
 ```
+
+**Integration and E2E tests** require Postgres. Set `DATABASE_URL` and ensure the container is running:
+```bash
+docker-compose up -d
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/webhooks?sslmode=disable go test ./...
+```
+
+Tests in `db/` and `integration_test/` are automatically skipped when `DATABASE_URL` is not set.
 
 ## Design Decisions
 

@@ -12,6 +12,7 @@ import (
 	"github.com/deanle/optivian-webhook/models"
 	"github.com/deanle/optivian-webhook/worker"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 )
 
 // mockStore records status transitions for assertions.
@@ -64,17 +65,13 @@ func TestProcess_Success(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
-
 	store := &mockStore{}
+	
 	runEvent(t, store, srv)
 
-	if got := store.lastStatus(); got != models.StatusCompleted {
-		t.Fatalf("expected completed, got %s", got)
-	}
+	assert.Equal(t, models.StatusCompleted, store.lastStatus())
 	// processing + completed = 2 status updates, 1 API attempt
-	if n := store.callCount(); n != 2 {
-		t.Fatalf("expected 2 store calls, got %d", n)
-	}
+	assert.Equal(t, 2, store.callCount())
 }
 
 func TestProcess_AllFail(t *testing.T) {
@@ -84,16 +81,12 @@ func TestProcess_AllFail(t *testing.T) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer srv.Close()
-
 	store := &mockStore{}
+
 	runEvent(t, store, srv)
 
-	if got := store.lastStatus(); got != models.StatusFailed {
-		t.Fatalf("expected failed, got %s", got)
-	}
-	if n := int(attempts.Load()); n != 3 {
-		t.Fatalf("expected 3 API attempts, got %d", n)
-	}
+	assert.Equal(t, models.StatusFailed, store.lastStatus())
+	assert.Equal(t, int32(3), attempts.Load())
 }
 
 func TestProcess_RetryThenSucceed(t *testing.T) {
@@ -107,14 +100,10 @@ func TestProcess_RetryThenSucceed(t *testing.T) {
 		}
 	}))
 	defer srv.Close()
-
 	store := &mockStore{}
+	
 	runEvent(t, store, srv)
 
-	if got := store.lastStatus(); got != models.StatusCompleted {
-		t.Fatalf("expected completed, got %s", got)
-	}
-	if n := int(attempts.Load()); n != 3 {
-		t.Fatalf("expected 3 API attempts, got %d", n)
-	}
+	assert.Equal(t, models.StatusCompleted, store.lastStatus())
+	assert.Equal(t, int32(3), attempts.Load())
 }

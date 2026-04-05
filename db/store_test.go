@@ -59,11 +59,11 @@ func newTestEvent() *models.Event {
 func TestStore_CreateEvent(t *testing.T) {
 	store := connectTestDB(t)
 	ctx := context.Background()
-
 	event := newTestEvent()
-	err := store.CreateEvent(ctx, event)
-	require.NoError(t, err)
 
+	err := store.CreateEvent(ctx, event)
+
+	require.NoError(t, err)
 	got, err := store.GetEvent(ctx, event.ID)
 	require.NoError(t, err)
 	require.NotNil(t, got)
@@ -79,6 +79,7 @@ func TestStore_GetEvent_NotFound(t *testing.T) {
 	ctx := context.Background()
 
 	got, err := store.GetEvent(ctx, uuid.New())
+
 	require.NoError(t, err)
 	assert.Nil(t, got)
 }
@@ -89,11 +90,11 @@ func TestStore_UpdateEventStatus(t *testing.T) {
 
 	event := newTestEvent()
 	require.NoError(t, store.CreateEvent(ctx, event))
-
 	processedAt := time.Now().UTC().Truncate(time.Microsecond)
-	err := store.UpdateEventStatus(ctx, event.ID, models.StatusCompleted, &processedAt)
-	require.NoError(t, err)
 
+	err := store.UpdateEventStatus(ctx, event.ID, models.StatusCompleted, &processedAt)
+
+	require.NoError(t, err)
 	got, err := store.GetEvent(ctx, event.ID)
 	require.NoError(t, err)
 	require.NotNil(t, got)
@@ -105,13 +106,12 @@ func TestStore_UpdateEventStatus(t *testing.T) {
 func TestStore_UpdateEventStatus_NilProcessedAt(t *testing.T) {
 	store := connectTestDB(t)
 	ctx := context.Background()
-
 	event := newTestEvent()
 	require.NoError(t, store.CreateEvent(ctx, event))
 
 	err := store.UpdateEventStatus(ctx, event.ID, models.StatusProcessing, nil)
+	
 	require.NoError(t, err)
-
 	got, err := store.GetEvent(ctx, event.ID)
 	require.NoError(t, err)
 	require.NotNil(t, got)
