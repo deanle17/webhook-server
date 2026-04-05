@@ -6,57 +6,32 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/deanle/optivian-webhook/handler"
 	"github.com/deanle/optivian-webhook/models"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
-// mockStore is an in-memory EventStore for testing.
 type mockStore struct {
-	mu     sync.Mutex
-	events map[uuid.UUID]*models.Event
-	err    error // if set, all methods return this error
+	mock.Mock
 }
 
-func newMockStore() *mockStore {
-	return &mockStore{events: make(map[uuid.UUID]*models.Event)}
+func (m *mockStore) CreateEvent(ctx context.Context, e *models.Event) error {
+	return m.Called(ctx, e).Error(0)
 }
 
-func (m *mockStore) CreateEvent(_ context.Context, e *models.Event) error {
-	if m.err != nil {
-		return m.err
-	}
-	m.mu.Lock()
-	m.events[e.ID] = e
-	m.mu.Unlock()
-	return nil
+func (m *mockStore) GetEvent(ctx context.Context, id uuid.UUID) (*models.Event, error) {
+	args := m.Called(ctx, id)
+	event, _ := args.Get(0).(*models.Event)
+	return event, args.Error(1)
 }
 
-func (m *mockStore) GetEvent(_ context.Context, id uuid.UUID) (*models.Event, error) {
-	if m.err != nil {
-		return nil, m.err
-	}
-	m.mu.Lock()
-	e := m.events[id]
-	m.mu.Unlock()
-	return e, nil
-}
-
-func (m *mockStore) UpdateEventStatus(_ context.Context, id uuid.UUID, status models.Status, processedAt *time.Time) error {
-	if m.err != nil {
-		return m.err
-	}
-	m.mu.Lock()
-	if e, ok := m.events[id]; ok {
-		e.Status = status
-		e.ProcessedAt = processedAt
-	}
-	m.mu.Unlock()
-	return nil
+func (m *mockStore) UpdateEventStatus(ctx context.Context, id uuid.UUID, status models.Status, processedAt *time.Time) error {
+	return m.Called(ctx, id, status, processedAt).Error(0)
 }
 
 func newHandler(store *mockStore) (*handler.WebhookHandler, chan *models.Event) {
@@ -65,7 +40,9 @@ func newHandler(store *mockStore) (*handler.WebhookHandler, chan *models.Event) 
 }
 
 func TestCreate_Success(t *testing.T) {
-	h, ch := newHandler(newMockStore())
+	store := new(mockStore)
+	store.On("CreateEvent", mock.Anything, mock.AnythingOfType("*models.Event")).Return(nil)
+	h, ch := newHandler(store)
 
 	body := `{"event_type":"order.created","source":"checkout","payload":{"id":1}}`
 	req := httptest.NewRequest(http.MethodPost, "/webhooks", bytes.NewBufferString(body))
@@ -74,25 +51,23 @@ func TestCreate_Success(t *testing.T) {
 
 	h.Create(w, req)
 
-	if w.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusCreated, w.Code)
 
 	var resp map[string]string
 	json.NewDecoder(w.Body).Decode(&resp)
-	if resp["id"] == "" {
-		t.Fatal("expected id in response")
-	}
+	assert.NotEmpty(t, resp["id"])
 
 	select {
 	case <-ch:
 	default:
 		t.Fatal("expected event to be queued")
 	}
+	store.AssertExpectations(t)
 }
 
 func TestCreate_MissingEventType(t *testing.T) {
-	h, _ := newHandler(newMockStore())
+	store := new(mockStore)
+	h, _ := newHandler(store)
 
 	body := `{"source":"checkout","payload":{"id":1}}`
 	req := httptest.NewRequest(http.MethodPost, "/webhooks", bytes.NewBufferString(body))
@@ -100,13 +75,13 @@ func TestCreate_MissingEventType(t *testing.T) {
 
 	h.Create(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	store.AssertNotCalled(t, "CreateEvent")
 }
 
 func TestCreate_MissingSource(t *testing.T) {
-	h, _ := newHandler(newMockStore())
+	store := new(mockStore)
+	h, _ := newHandler(store)
 
 	body := `{"event_type":"order.created","payload":{"id":1}}`
 	req := httptest.NewRequest(http.MethodPost, "/webhooks", bytes.NewBufferString(body))
@@ -114,13 +89,13 @@ func TestCreate_MissingSource(t *testing.T) {
 
 	h.Create(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	store.AssertNotCalled(t, "CreateEvent")
 }
 
 func TestCreate_EmptyPayload(t *testing.T) {
-	h, _ := newHandler(newMockStore())
+	store := new(mockStore)
+	h, _ := newHandler(store)
 
 	body := `{"event_type":"order.created","source":"checkout","payload":null}`
 	req := httptest.NewRequest(http.MethodPost, "/webhooks", bytes.NewBufferString(body))
@@ -128,14 +103,13 @@ func TestCreate_EmptyPayload(t *testing.T) {
 
 	h.Create(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	store.AssertNotCalled(t, "CreateEvent")
 }
 
 func TestCreate_StoreError(t *testing.T) {
-	store := newMockStore()
-	store.err = context.DeadlineExceeded
+	store := new(mockStore)
+	store.On("CreateEvent", mock.Anything, mock.AnythingOfType("*models.Event")).Return(context.DeadlineExceeded)
 	h, _ := newHandler(store)
 
 	body := `{"event_type":"order.created","source":"checkout","payload":{"id":1}}`
@@ -144,15 +118,14 @@ func TestCreate_StoreError(t *testing.T) {
 
 	h.Create(w, req)
 
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	store.AssertExpectations(t)
 }
 
 func TestGet_Success(t *testing.T) {
-	store := newMockStore()
+	store := new(mockStore)
 	id := uuid.New()
-	store.events[id] = &models.Event{
+	event := &models.Event{
 		ID:        id,
 		EventType: "order.created",
 		Source:    "checkout",
@@ -160,42 +133,46 @@ func TestGet_Success(t *testing.T) {
 		Status:    models.StatusPending,
 		CreatedAt: time.Now(),
 	}
-
+	store.On("GetEvent", mock.Anything, id).Return(event, nil)
 	h, _ := newHandler(store)
+
 	req := httptest.NewRequest(http.MethodGet, "/webhooks/"+id.String(), nil)
 	req.SetPathValue("id", id.String())
 	w := httptest.NewRecorder()
 
 	h.Get(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp models.Event
-	json.NewDecoder(w.Body).Decode(&resp)
-	if resp.ID != id {
-		t.Fatalf("expected id %s, got %s", id, resp.ID)
+	var resp struct {
+		ID     uuid.UUID     `json:"id"`
+		Status models.Status `json:"status"`
 	}
+	json.NewDecoder(w.Body).Decode(&resp)
+	assert.Equal(t, id, resp.ID)
+	assert.Equal(t, models.StatusPending, resp.Status)
+	store.AssertExpectations(t)
 }
 
 func TestGet_NotFound(t *testing.T) {
-	h, _ := newHandler(newMockStore())
-
+	store := new(mockStore)
 	id := uuid.New()
+	store.On("GetEvent", mock.Anything, id).Return((*models.Event)(nil), nil)
+	h, _ := newHandler(store)
+
 	req := httptest.NewRequest(http.MethodGet, "/webhooks/"+id.String(), nil)
 	req.SetPathValue("id", id.String())
 	w := httptest.NewRecorder()
 
 	h.Get(w, req)
 
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	store.AssertExpectations(t)
 }
 
 func TestGet_InvalidUUID(t *testing.T) {
-	h, _ := newHandler(newMockStore())
+	store := new(mockStore)
+	h, _ := newHandler(store)
 
 	req := httptest.NewRequest(http.MethodGet, "/webhooks/not-a-uuid", nil)
 	req.SetPathValue("id", "not-a-uuid")
@@ -203,7 +180,6 @@ func TestGet_InvalidUUID(t *testing.T) {
 
 	h.Get(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	store.AssertNotCalled(t, "GetEvent")
 }

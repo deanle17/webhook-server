@@ -19,6 +19,11 @@ func NewWebhookHandler(store db.EventStore, eventCh chan<- *models.Event) *Webho
 	return &WebhookHandler{store: store, eventCh: eventCh}
 }
 
+type getResponse struct {
+	ID     uuid.UUID    `json:"id"`
+	Status models.Status `json:"status"`
+}
+
 type createRequest struct {
 	EventType string          `json:"event_type"`
 	Source    string          `json:"source"`
@@ -81,7 +86,7 @@ func (h *WebhookHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, event)
+	writeJSON(w, http.StatusOK, getResponse{ID: event.ID, Status: event.Status})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
