@@ -62,7 +62,8 @@ go test ./...
 
 ## What I'd Improve
 
-- **Persistent retry queue** — events in the channel are lost on crash. A DB-backed queue (poll on startup for `pending`/`processing` events) would survive restarts.
+- **Persistent retry queue** — events in the channel are lost on crash. A DB-backed queue (poll on startup for `pending`/`processing` events) would help worker picks up the event where they were left off.
 - **Structured logging** — replace `log.Printf` with `slog` for JSON-formatted, level-aware logs.
 - **Metrics** — expose a `/metrics` endpoint (Prometheus) for queue depth, processing latency, and error rates.
 - **Migration versioning** — use a tool like `goose` or `golang-migrate` to manage schema versions rather than running raw SQL at startup.
+- **Dual-write inconsistency** — after a successful external API call, a failure to update the DB status leaves the event stuck in `processing`. The outbox pattern (write intent and mark complete in the same DB transaction) would eliminate this gap.
