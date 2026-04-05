@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"net/http"
 	"os"
@@ -30,18 +31,7 @@ func main() {
 
 	store := db.NewStore(database)
 
-	concurrency := 5
-	if v := os.Getenv("WORKER_CONCURRENCY"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			concurrency = n
-		}
-	}
-
-	eventCh := make(chan *models.Event, 100)
-
-	workerCtx, cancelWorkers := context.WithCancel(ctx)
-	pool := worker.NewPool(store, eventCh, concurrency)
-	pool.Start(workerCtx)
+	eventCh, pool, cancelWorkers := startWorkerPool(ctx, store)
 
 	wh := handler.NewWebhookHandler(store, eventCh)
 
@@ -63,6 +53,17 @@ func main() {
 		}
 	}()
 
+	waitForShutdown(ctx, srv, eventCh, pool, cancelWorkers, database)
+}
+
+func waitForShutdown(
+	ctx context.Context,
+	srv *http.Server,
+	eventCh chan *models.Event,
+	pool *worker.Pool,
+	cancelWorkers context.CancelFunc,
+	database *sql.DB,
+) {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
 	<-quit
@@ -96,4 +97,19 @@ func main() {
 
 	database.Close()
 	log.Println("shutdown complete")
+}
+
+func startWorkerPool(ctx context.Context, store db.EventStore) (chan *models.Event, *worker.Pool, context.CancelFunc) {
+	concurrency := 5
+	if v := os.Getenv("WORKER_CONCURRENCY"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			concurrency = n
+		}
+	}
+
+	eventCh := make(chan *models.Event, 100)
+	workerCtx, cancelWorkers := context.WithCancel(ctx)
+	pool := worker.NewPool(store, eventCh, concurrency)
+	pool.Start(workerCtx)
+	return eventCh, pool, cancelWorkers
 }
