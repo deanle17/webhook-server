@@ -71,8 +71,12 @@ Tests in `db/` and `integration_test/` are automatically skipped when `DATABASE_
 
 ## What I'd Improve
 
-- **Persistent retry queue** — events in the channel are lost on crash. A DB-backed queue (poll on startup for `pending`/`processing` events) would help worker picks up the event where they were left off.
 - **Structured logging** — replace `log.Printf` with `slog` for JSON-formatted, level-aware logs.
 - **Metrics** — expose a `/metrics` endpoint (Prometheus) for queue depth, processing latency, and error rates.
 - **Migration versioning** — use a tool like `goose` or `golang-migrate` to manage schema versions rather than running raw SQL at startup.
+- **Database-back queue instead of in-memory** - This would help solving 2 issues at the same time:
+    - Events in the (in-memory) channel are lost on crash. A DB-backed queue (poll on startup for `processing` events) would help worker picks up the event where they were left off
+    - If the channel is full, the event is stored in DB as pending and then silently dropped from the queue. It will sit in pending forever — no worker will ever pick it up again. The non-blocking send protects latency but creates a correctness hole. A recovery path is needed: a startup scan for stuck pending/processing events and re-enqueue them
 - **Dual-write inconsistency** — after a successful external API call, a failure to update the DB status leaves the event stuck in `processing`. The outbox pattern (write intent and mark complete in the same DB transaction) would eliminate this gap.
+- **Idempotency support** - Currently each POST /webhooks always creates a new event. There's no support for a caller-supplied idempotency key, so network retries by the webhook sender will create duplicate events.
+- **No backoff jitter** - All workers retrying their respective failed events will sleep for the exact same duration before retrying. At scale with many workers, this causes synchronized retry thundering herd. Adding random time jitter to spread the load

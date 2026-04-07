@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"net/http"
@@ -116,6 +117,7 @@ func (p *Pool) callExternalAPI(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("http: %w", err)
 	}
+	_, _ = io.Copy(io.Discard, resp.Body)
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 500 {

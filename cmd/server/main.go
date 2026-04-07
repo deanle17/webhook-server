@@ -44,7 +44,13 @@ func main() {
 		addr = ":8080"
 	}
 
-	srv := &http.Server{Addr: addr, Handler: mux}
+	srv := &http.Server{
+		Addr:         addr,
+		Handler:      mux,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
 
 	go func() {
 		log.Printf("listening on %s", addr)
