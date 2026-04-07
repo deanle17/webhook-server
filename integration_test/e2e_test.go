@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"context"
 	"github.com/deanle/optivian-webhook/db"
 	"github.com/deanle/optivian-webhook/handler"
 	"github.com/deanle/optivian-webhook/models"
@@ -21,7 +22,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"context"
 )
 
 // setupStack wires all components together and returns the test HTTP server URL.
@@ -112,10 +112,10 @@ func TestIntegration_HappyPath(t *testing.T) {
 	assert.Equal(t, http.StatusOK, getResp.StatusCode)
 
 	var statusResp struct {
-		ID         uuid.UUID     `json:"id"`
-		Status     models.Status `json:"status"`
+		ID     uuid.UUID     `json:"id"`
+		Status models.Status `json:"status"`
 	}
-	
+
 	require.NoError(t, json.NewDecoder(getResp.Body).Decode(&statusResp))
 	assert.Equal(t, id, statusResp.ID)
 	assert.Contains(t, []models.Status{models.StatusPending, models.StatusProcessing, models.StatusCompleted}, statusResp.Status)

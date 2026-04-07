@@ -110,7 +110,7 @@ func TestStore_UpdateEventStatus_NilProcessedAt(t *testing.T) {
 	require.NoError(t, store.CreateEvent(ctx, event))
 
 	err := store.UpdateEventStatus(ctx, event.ID, models.StatusProcessing, nil)
-	
+
 	require.NoError(t, err)
 	got, err := store.GetEvent(ctx, event.ID)
 	require.NoError(t, err)

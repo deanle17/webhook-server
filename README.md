@@ -73,6 +73,7 @@ Tests in `db/` and `integration_test/` are automatically skipped when `DATABASE_
 
 - **Structured logging** — replace `log.Printf` with `slog` for JSON-formatted, level-aware logs.
 - **Metrics** — expose a `/metrics` endpoint (Prometheus) for queue depth, processing latency, and error rates.
+- **Formatting** - Add format step into CI pipeline, or even pre-commit hook to ensure the code stays in shape
 - **Migration versioning** — use a tool like `goose` or `golang-migrate` to manage schema versions rather than running raw SQL at startup.
 - **Database-back queue instead of in-memory** - This would help solving 2 issues at the same time:
     - Events in the (in-memory) channel are lost on crash. A DB-backed queue (poll on startup for `processing` events) would help worker picks up the event where they were left off

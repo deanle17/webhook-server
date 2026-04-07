@@ -20,7 +20,7 @@ func NewWebhookHandler(store db.EventStore, eventCh chan<- *models.Event) *Webho
 }
 
 type getResponse struct {
-	ID     uuid.UUID    `json:"id"`
+	ID     uuid.UUID     `json:"id"`
 	Status models.Status `json:"status"`
 }
 

@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	maxAttempts    = 3
-	defaultAPIURL  = "https://httpbin.org/delay/1"
+	maxAttempts   = 3
+	defaultAPIURL = "https://httpbin.org/delay/1"
 )
 
 type Pool struct {

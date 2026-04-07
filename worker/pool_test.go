@@ -66,7 +66,7 @@ func TestProcess_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 	store := &mockStore{}
-	
+
 	runEvent(t, store, srv)
 
 	assert.Equal(t, models.StatusCompleted, store.lastStatus())
@@ -101,7 +101,7 @@ func TestProcess_RetryThenSucceed(t *testing.T) {
 	}))
 	defer srv.Close()
 	store := &mockStore{}
-	
+
 	runEvent(t, store, srv)
 
 	assert.Equal(t, models.StatusCompleted, store.lastStatus())
